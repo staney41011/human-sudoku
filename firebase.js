@@ -1,7 +1,10 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, setPersistence, browserSessionPersistence, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import { getDatabase, ref, get, set, update, onValue, runTransaction, remove } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
-import { firebaseConfig } from "./firebase-config.js";
+import { firebaseConfig as baseFirebaseConfig } from "./firebase-config.js";
+import { databaseURL } from "./database-config.js";
+
+const firebaseConfig = {...baseFirebaseConfig, databaseURL};
 
 export function configReady(){
   return Boolean(
@@ -15,7 +18,7 @@ export function configReady(){
 
 let app=null,auth=null,db=null;
 export async function ensureFirebase(){
-  if(!configReady()) throw new Error("Firebase Web App 已設定，但 Realtime Database URL 尚未填入 firebase-config.js。");
+  if(!configReady()) throw new Error("Firebase 設定尚未完成。");
   if(!app){
     app=initializeApp(firebaseConfig);
     auth=getAuth(app);
