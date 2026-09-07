@@ -1,11 +1,11 @@
 export const firebaseConfig = {
-  apiKey: "PASTE_YOUR_API_KEY",
-  authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
-  databaseURL: "https://PASTE_YOUR_PROJECT-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "PASTE_YOUR_PROJECT",
-  storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
-  messagingSenderId: "PASTE_YOUR_SENDER_ID",
-  appId: "PASTE_YOUR_APP_ID"
+  apiKey: "AIzaSyASE-FeiYrSMdB4juxZDMU0annHGE2i7nU",
+  authDomain: "human-sudoku.firebaseapp.com",
+  databaseURL: "",
+  projectId: "human-sudoku",
+  storageBucket: "human-sudoku.firebasestorage.app",
+  messagingSenderId: "140633318400",
+  appId: "1:140633318400:web:a5101fc38c2cbbdbe524e5"
 };
 
 export const APP_NAME = "無獨有偶，有你有偶";
