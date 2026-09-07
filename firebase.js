@@ -3,11 +3,19 @@ import { getAuth, setPersistence, browserSessionPersistence, signInAnonymously, 
 import { getDatabase, ref, get, set, update, onValue, runTransaction, remove } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
 import { firebaseConfig } from "./firebase-config.js";
 
-export function configReady(){return firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("PASTE_");}
+export function configReady(){
+  return Boolean(
+    firebaseConfig.apiKey &&
+    firebaseConfig.projectId &&
+    firebaseConfig.databaseURL &&
+    !firebaseConfig.apiKey.includes("PASTE_") &&
+    !firebaseConfig.databaseURL.includes("PASTE_")
+  );
+}
 
 let app=null,auth=null,db=null;
 export async function ensureFirebase(){
-  if(!configReady()) throw new Error("Firebase 尚未設定。請先填寫 firebase-config.js。");
+  if(!configReady()) throw new Error("Firebase Web App 已設定，但 Realtime Database URL 尚未填入 firebase-config.js。");
   if(!app){
     app=initializeApp(firebaseConfig);
     auth=getAuth(app);
