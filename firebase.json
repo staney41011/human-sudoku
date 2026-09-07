@@ -1,5 +1,18 @@
 {
   "database": {
     "rules": "database.rules.json"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "database.rules.json",
+      ".firebaserc",
+      "README.md",
+      ".git/**",
+      ".github/**"
+    ],
+    "cleanUrls": true,
+    "trailingSlash": false
   }
 }
