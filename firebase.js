@@ -18,14 +18,26 @@ export function configReady(){
 
 let app=null,auth=null,db=null;
 export async function ensureFirebase(){
-  if(!configReady()) throw new Error("Firebase 設定尚未完成。");
+  if(!configReady()) throw new Error("Firebase Web App 或 Realtime Database URL 尚未設定完成。");
   if(!app){
     app=initializeApp(firebaseConfig);
     auth=getAuth(app);
     db=getDatabase(app);
     await setPersistence(auth,browserSessionPersistence);
   }
-  if(!auth.currentUser) await signInAnonymously(auth);
+  if(!auth.currentUser){
+    try{
+      await signInAnonymously(auth);
+    }catch(e){
+      if(e?.code==="auth/admin-restricted-operation"){
+        throw new Error("Firebase Authentication 目前禁止建立使用者。請到 Firebase Console → Authentication → Settings → User actions，開啟 User creation；並確認 Sign-in method 的 Anonymous 已啟用。");
+      }
+      if(e?.code==="auth/operation-not-allowed"){
+        throw new Error("Firebase Anonymous Authentication 尚未啟用。請到 Firebase Console → Authentication → Sign-in method → Anonymous → Enable。");
+      }
+      throw e;
+    }
+  }
   return {app,auth,db};
 }
 export function currentUid(){return auth?.currentUser?.uid||null;}
