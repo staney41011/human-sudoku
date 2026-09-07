@@ -37,6 +37,5 @@ function render(){
   if(phase==="round2"||phase==="round2_done")text="第二回合：名字消失了！用興趣或顏色重新找到彼此。";$("#phaseText").textContent=text;
   const rn=phase.startsWith("round2")?2:phase.startsWith("round1")?1:0;const clues=rn?game.rounds?.[rn]?.clues?.[myPlayerId]:null;
   if(clues){$("#clues").innerHTML=clues.map(c=>`<div class="clue"><span>${c.relation==="adjacent"?"↔️":c.relation==="row"?"↔":"↕"}</span><b>${clueLabel(c)}</b></div>`).join("");show("#clues");}else show("#clues",false);
-  show("#leaderLink",game.meta?.leaderPlayerId===myPlayerId&&(phase==="round1"||phase==="round2"));
 }
 boot();
