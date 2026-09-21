@@ -39,6 +39,56 @@ export function neighborsOf(cell,size,holes){const hs=new Set(holes);return [[ce
 
 function chooseOther(candidates,exclude=new Set()){const pool=candidates.filter(x=>!exclude.has(x));return pool.length?pool[Math.floor(Math.random()*pool.length)]:candidates[Math.floor(Math.random()*candidates.length)];}
 
+function chooseAnchorCells(cells,size,requestedCount){
+  const byRow=Array.from({length:size},()=>[]);
+  const activeCols=new Set();
+  for(const cell of cells){byRow[cell.r].push(cell);activeCols.add(cell.c);}
+  const rows=byRow.map((x,i)=>x.length?i:null).filter(x=>x!==null);
+  const matchCol=new Map();
+  function augment(r,seen){
+    for(const cell of shuffle(byRow[r])){
+      if(seen.has(cell.c))continue;
+      seen.add(cell.c);
+      const prev=matchCol.get(cell.c);
+      if(!prev||augment(prev.r,seen)){matchCol.set(cell.c,cell);return true;}
+    }
+    return false;
+  }
+  let perfect=true;
+  for(const r of rows){if(!augment(r,new Set())){perfect=false;break;}}
+  const selected=new Set();
+  if(perfect&&matchCol.size===rows.length&&rows.length===activeCols.size){
+    for(const cell of matchCol.values())selected.add(cell.k);
+  }else{
+    const coveredCols=new Set();
+    for(const r of rows){
+      const preferred=byRow[r].find(c=>!coveredCols.has(c.c))||byRow[r][0];
+      if(preferred){selected.add(preferred.k);coveredCols.add(preferred.c);}
+    }
+    for(const c of activeCols){
+      if(coveredCols.has(c))continue;
+      const cell=cells.find(x=>x.c===c);
+      if(cell){selected.add(cell.k);coveredCols.add(c);}
+    }
+  }
+  const desired=Math.max(requestedCount,selected.size);
+  for(const cell of shuffle(cells)){if(selected.size>=desired)break;selected.add(cell.k);}
+  return [...selected];
+}
+
+function uniqueAnchorDescriptor(targetId,playerMap,anchorIds){
+  const target=playerMap[targetId];
+  const kinds=shuffle(["interest","color"]);
+  for(const kind of kinds){
+    const count=anchorIds.filter(id=>playerMap[id]?.[kind]===target[kind]).length;
+    if(count===1)return {kind,value:target[kind]};
+  }
+  const pair=`${target.interest}＋${target.color}`;
+  const pairCount=anchorIds.filter(id=>`${playerMap[id]?.interest}＋${playerMap[id]?.color}`===pair).length;
+  if(pairCount===1)return {kind:"profile",value:pair};
+  return {kind:"playerNumber",value:`#${String(target.number).padStart(2,"0")}`};
+}
+
 export function buildRound(players,size,holes,roundNo){
   const cells=activeCells(size,holes);
   if(players.length!==cells.length)throw new Error("玩家數與可用格數不一致");
@@ -46,70 +96,120 @@ export function buildRound(players,size,holes,roundNo){
   const placement={};const byCell={};
   cells.forEach((cell,i)=>{placement[shuffledPlayers[i].id]=cell.k;byCell[cell.k]=shuffledPlayers[i].id;});
   const playerMap=Object.fromEntries(players.map(p=>[p.id,p]));
+
+  const requestedAnchors=Math.max(1,Math.ceil(players.length/5));
+  const anchorCells=chooseAnchorCells(cells,size,requestedAnchors);
+  const anchors={};
+  for(const cellKey of anchorCells){const pid=byCell[cellKey];if(pid)anchors[pid]=cellKey;}
+  const anchorIds=Object.keys(anchors);
+  const anchorSet=new Set(anchorIds);
+
+  const rowAnchors=Array.from({length:size},()=>[]);
+  const colAnchors=Array.from({length:size},()=>[]);
+  for(const pid of anchorIds){
+    const [r,c]=parseKey(anchors[pid]);
+    rowAnchors[r].push(pid);colAnchors[c].push(pid);
+  }
+  for(const cell of cells){
+    if(!rowAnchors[cell.r].length||!colAnchors[cell.c].length)throw new Error("固定定位點未覆蓋所有列欄，請重新產生題目。");
+  }
+
+  const makeExact=(relation,targetId)=>{
+    const target=playerMap[targetId];
+    const duplicate=players.filter(x=>x.name===target.name).length>1;
+    return {relation,kind:"player",value:duplicate?`${target.name}（#${String(target.number).padStart(2,"0")}）`:target.name,targetId};
+  };
+  const makeLoose=(relation,targetId)=>{
+    const target=playerMap[targetId];
+    const kind=Math.random()<.5?"interest":"color";
+    return {relation,kind,value:target[kind],targetId};
+  };
+  const makeAnchorClue=(relation,targetId)=>{
+    if(roundNo===1)return {...makeExact(relation,targetId),scope:"anchor"};
+    const d=uniqueAnchorDescriptor(targetId,playerMap,anchorIds);
+    return {relation,kind:d.kind,value:d.value,targetId,scope:"anchor"};
+  };
+
   const clues={};
   for(const p of players){
-    const cellKey=placement[p.id], [r,c]=parseKey(cellKey), cell={r,c};
+    const cellKey=placement[p.id],[r,c]=parseKey(cellKey),cell={r,c};
     const neighborIds=neighborsOf(cell,size,holes).map(k=>byCell[k]).filter(Boolean);
     if(neighborIds.length<2)throw new Error("盤面存在不足兩名緊鄰玩家的位置，請重新產生空格。");
     const two=shuffle(neighborIds).slice(0,2);
     const rowIds=cells.filter(x=>x.r===r&&x.k!==cellKey).map(x=>byCell[x.k]).filter(Boolean);
     const colIds=cells.filter(x=>x.c===c&&x.k!==cellKey).map(x=>byCell[x.k]).filter(Boolean);
-    const exclude=new Set(two);
-    const rowTarget=chooseOther(rowIds,exclude) || chooseOther(rowIds);
-    const colTarget=chooseOther(colIds,exclude) || chooseOther(colIds);
-    const make=(relation,targetId)=>{
-      const target=playerMap[targetId];
-      if(roundNo===1){
-        const duplicate=players.filter(x=>x.name===target.name).length>1;
-        return {relation,kind:"player",value:duplicate?`${target.name}（#${String(target.number).padStart(2,"0")}）`:target.name,targetId};
-      }
-      const kind=Math.random()<.5?"interest":"color";
-      return {relation,kind,value:target[kind],targetId};
-    };
+    let rowClue,colClue;
+    if(anchorSet.has(p.id)){
+      const exclude=new Set(two);
+      const rowTarget=chooseOther(rowIds,exclude)||chooseOther(rowIds);
+      const colTarget=chooseOther(colIds,exclude)||chooseOther(colIds);
+      rowClue=roundNo===1?makeExact("row",rowTarget):makeLoose("row",rowTarget);
+      colClue=roundNo===1?makeExact("column",colTarget):makeLoose("column",colTarget);
+    }else{
+      const rowTarget=chooseOther(rowAnchors[r])||rowAnchors[r][0];
+      const colTarget=chooseOther(colAnchors[c])||colAnchors[c][0];
+      rowClue=makeAnchorClue("row",rowTarget);
+      colClue=makeAnchorClue("column",colTarget);
+    }
     clues[p.id]=[
-      make("adjacent",two[0]),make("adjacent",two[1]),make("column",colTarget),make("row",rowTarget)
+      roundNo===1?makeExact("adjacent",two[0]):makeLoose("adjacent",two[0]),
+      roundNo===1?makeExact("adjacent",two[1]):makeLoose("adjacent",two[1]),
+      colClue,rowClue
     ];
   }
-  return {roundNo,size,holes,placement,clues,createdAt:Date.now(),submission:null,result:null};
+  return {
+    roundNo,size,holes,placement,anchors,
+    requestedAnchorCount:requestedAnchors,
+    actualAnchorCount:anchorIds.length,
+    uniqueSolution:true,
+    uniquenessMethod:"fixed-anchors-row-column-intersection",
+    clues,createdAt:Date.now(),submission:null,result:null
+  };
 }
 
-function matchesClue(player,clue){
+function matchesClue(player,clue,anchorSet){
   if(!player)return false;
+  if(clue.scope==="anchor"&&!anchorSet.has(player.id))return false;
   if(clue.kind==="player")return player.id===clue.targetId;
+  if(clue.kind==="playerNumber")return player.id===clue.targetId;
   if(clue.kind==="name")return player.name===clue.value;
   if(clue.kind==="interest")return player.interest===clue.value;
   if(clue.kind==="color")return player.color===clue.value;
+  if(clue.kind==="profile")return `${player.interest}＋${player.color}`===clue.value;
   return false;
 }
 
-function hasDistinctMatches(clues,candidatePlayers){
+function hasDistinctMatches(clues,candidatePlayers,anchorSet){
   if(clues.length===0)return true;
   const used=new Set();
   function dfs(i){
     if(i===clues.length)return true;
-    for(const p of candidatePlayers){if(used.has(p.id)||!matchesClue(p,clues[i]))continue;used.add(p.id);if(dfs(i+1))return true;used.delete(p.id);}return false;
+    for(const p of candidatePlayers){if(used.has(p.id)||!matchesClue(p,clues[i],anchorSet))continue;used.add(p.id);if(dfs(i+1))return true;used.delete(p.id);}return false;
   }
   return dfs(0);
 }
 
 export function evaluateSubmission(players,round,submission){
   const byId=Object.fromEntries(players.map(p=>[p.id,p]));
+  const anchorSet=new Set(Object.keys(round.anchors||{}));
   const byCell={};Object.entries(submission||{}).forEach(([cell,pid])=>{if(pid)byCell[cell]=pid;});
   const results={};let correct=0;
   for(const p of players){
     const entry=Object.entries(byCell).find(([,pid])=>pid===p.id);
     if(!entry){results[p.id]={ok:false,failed:["missing"]};continue;}
     const cellKey=entry[0],[r,c]=parseKey(cellKey);const clues=round.clues[p.id]||[];
+    const failed=[];
+    const fixed=round.anchors?.[p.id];
+    if(fixed&&fixed!==cellKey)failed.push("fixed");
     const adjClues=clues.filter(x=>x.relation==="adjacent");
     const adjPlayers=neighborsOf({r,c},round.size,round.holes).map(k=>byId[byCell[k]]).filter(Boolean);
-    const failed=[];
-    if(!hasDistinctMatches(adjClues,adjPlayers))failed.push("adjacent");
+    if(!hasDistinctMatches(adjClues,adjPlayers,anchorSet))failed.push("adjacent");
     const rowClue=clues.find(x=>x.relation==="row");
     const rowPlayers=Object.entries(byCell).filter(([k])=>parseKey(k)[0]===r&&k!==cellKey).map(([,pid])=>byId[pid]).filter(Boolean);
-    if(rowClue&&!rowPlayers.some(x=>matchesClue(x,rowClue)))failed.push("row");
+    if(rowClue&&!rowPlayers.some(x=>matchesClue(x,rowClue,anchorSet)))failed.push("row");
     const colClue=clues.find(x=>x.relation==="column");
     const colPlayers=Object.entries(byCell).filter(([k])=>parseKey(k)[1]===c&&k!==cellKey).map(([,pid])=>byId[pid]).filter(Boolean);
-    if(colClue&&!colPlayers.some(x=>matchesClue(x,colClue)))failed.push("column");
+    if(colClue&&!colPlayers.some(x=>matchesClue(x,colClue,anchorSet)))failed.push("column");
     const ok=failed.length===0;results[p.id]={ok,failed};if(ok)correct++;
   }
   return {byPlayer:results,correct,total:players.length,allCorrect:correct===players.length,checkedAt:Date.now()};
@@ -117,6 +217,7 @@ export function evaluateSubmission(players,round,submission){
 
 export function clueLabel(c){
   const rel=c.relation==="adjacent"?"緊鄰":c.relation==="row"?"同列":"同欄";
-  const icon=c.kind==="color"?"🎨":c.kind==="interest"?"🎯":"👤";
-  return `${icon} ${rel}：${c.value}`;
+  const icon=c.kind==="color"?"🎨":c.kind==="interest"?"🎯":c.kind==="profile"?"🧩":c.kind==="playerNumber"?"🔢":"👤";
+  const anchor=c.scope==="anchor"?"⭐ 已定位玩家｜":"";
+  return `${icon} ${rel}：${anchor}${c.value}`;
 }
