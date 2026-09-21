@@ -34,8 +34,13 @@ function render(){
   const phase=game.meta?.phase||"lobby";let text="等待其他玩家登入…";
   if(phase==="intro"){const order=game.meta?.introOrder||[];const cur=order[game.meta?.introIndex||0];text=cur===myPlayerId?"🎤 輪到你自我介紹了！請站起來跟大家打招呼。":"👀 自我介紹進行中，記住大家的名字、興趣和顏色。";}
   if(phase==="round1"||phase==="round1_done")text="第一回合：走進人群、交換線索，找出你在真人矩陣中的位置。";
-  if(phase==="round2"||phase==="round2_done")text="第二回合：名字消失了！用興趣或顏色重新找到彼此。";$("#phaseText").textContent=text;
-  const rn=phase.startsWith("round2")?2:phase.startsWith("round1")?1:0;const clues=rn?game.rounds?.[rn]?.clues?.[myPlayerId]:null;
-  if(clues){$("#clues").innerHTML=clues.map(c=>`<div class="clue"><span>${c.relation==="adjacent"?"↔️":c.relation==="row"?"↔":"↕"}</span><b>${clueLabel(c)}</b></div>`).join("");show("#clues");}else show("#clues",false);
+  if(phase==="round2"||phase==="round2_done")text="第二回合：名字消失了！用興趣或顏色重新找到彼此。";
+  const rn=phase.startsWith("round2")?2:phase.startsWith("round1")?1:0;
+  const round=rn?game.rounds?.[rn]:null;
+  const fixed=round?.anchors?.[myPlayerId];
+  if(fixed){const [r,c]=fixed.split(",").map(Number);text=`⭐ 你是本回合的固定定位玩家！請直接站到第 ${r+1} 列、第 ${c+1} 欄。其他人會利用你的位置推理。`;}
+  $("#phaseText").textContent=text;
+  const clues=round?.clues?.[myPlayerId];
+  if(clues){const fixedHtml=fixed?`<div class="clue anchor-hint"><span>⭐</span><b>固定位置：第 ${Number(fixed.split(",")[0])+1} 列・第 ${Number(fixed.split(",")[1])+1} 欄</b></div>`:"";$("#clues").innerHTML=fixedHtml+clues.map(c=>`<div class="clue"><span>${c.relation==="adjacent"?"↔️":c.relation==="row"?"↔":"↕"}</span><b>${clueLabel(c)}</b></div>`).join("");show("#clues");}else show("#clues",false);
 }
 boot();
